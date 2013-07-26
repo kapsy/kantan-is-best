@@ -11,13 +11,19 @@
 #include <stdio.h>
 #include <math.h>
 
+#define SEC_IN_NS 1000000000
+#define SEC_IN_US 1000000
 
-#define LOG_TAG ("gles2_scale_xform")
+#define LOG_TAG ("GLSL_canvas")
 #define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__))
 #define LOGD(...) ((void)__android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__))
 #define LOGW(...) ((void)__android_log_print(ANDROID_LOG_WARN,  LOG_TAG, __VA_ARGS__))
 #define LOGE(...) ((void)__android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__))
 struct engine {
+
+
+
+
 	struct android_app* app;
 	EGLDisplay display;
 	EGLSurface surface;
@@ -25,6 +31,12 @@ struct engine {
 	int animating;
 
 };
+
+
+//#3) When you render the fullscreen quad, you definately don't want to use the same projection matrix.
+//The easiest is to just use no matrix at all (define input coordinates in normalized device coordinates).
+//		Just draw your quad with vertices (+/-1, +/-1, 0) and that will align with the fullscreen
+//		without any transform required.
 
 
 typedef struct {
@@ -38,7 +50,7 @@ typedef struct {
   int         height;
 } ScreenSettings;
 
-const char vShaderSrc[] =
+/*const char vShaderSrc[] =
   "attribute vec3 aPosition;\n"
   "attribute vec2 aTex;\n"
   "varying   vec2 vTex;\n"
@@ -56,50 +68,181 @@ const char fShaderSrc[] =
   "void main()        \n"
   "{                  \n"
   "  gl_FragColor = vec4(vTex.y, vTex.x, 0.5, 1.0);\n"
-  "}                  \n";
+  "}                  \n";*/
+
+
+//const char v_shader_k[] =
+////		  "attribute vec2 position; \n"
+//		"attribute vec3 position;\n"
+//		"attribute vec2 tex;\n"
+//		"void main() { \n"
+//		"		gl_Position = vec4(position, 1.0); \n"
+//		"}\n";
+
+const char v_shader_k[] =
+		  "attribute vec2 position; \n"
+		"attribute vec2 tex;\n"
+		"void main() { \n"
+		"		gl_Position = vec4(position, 0.0, 1.0); \n"
+		"}\n";
+
+
+//const char f_shader_k[] =
+////	"#ifdef GL_ES\n"
+//	"precision mediump float;\n"
+////	"#endif\n"
+//	"uniform float time;\n"
+//	"uniform vec2 resolution;\n"
+//	"uniform vec2 pos_move;\n"
+//
+//	"void main( void ) {\n"
+//	"	float sum = .01;\n"
+//	"	float size = resolution.x / 2.0;\n"
+//	"	float g = .9;\n"
+//	"	int num = 30;\n"
+//	"	float t = time/3.0;\n"
+//
+//	"	for (int i = 0; i < 2; ++i) {\n"
+//	"		vec2 position = resolution / 2.0;\n"
+//	"		position.x += sin(t / 3.0 + 1.0 * float(i)) * resolution.x * 0.25;\n"
+////	"		position.y += tan(t / 556.0 + (2.0 + sin(t) * 0.01) * float(i)) * resolution.y * 0.25;\n"
+//	"		float dist = length(gl_FragCoord.xy - position);\n"
+//	"		sum += size / pow(dist, g);\n"
+//	"	}\n"
+//
+//
+//
+//
+//	"	float val = sum / float(num);\n"
+//	"	vec4 color = vec4(val*0.8, val*0.0, val*0.5, 1);\n"
+//	"	gl_FragColor = vec4(color);\n"
+//	"}\n";
+
+const char f_shader_k[] =
+	"#ifdef GL_ES\n"
+	"precision mediump float;\n"
+	"#endif\n"
+
+	"uniform vec2 mouse;\n"
+	"uniform vec2 resolution;\n"
+	"uniform float time;\n"
+
+	"void main(){\n"
+	"	vec2 light_pos = resolution*mouse;\n"
+	"	float intensity = 0.028;\n"
+
+	"	float dist = distance(gl_FragCoord.xy, light_pos);\n"
+
+	"	vec3 light_color = vec3(0, 1.0, 0.8);\n"
+	"	float alpha = 0.8 / (dist*intensity);\n"
+	"	vec4 final_color = vec4(light_color, 1.0)*vec4(alpha, alpha, alpha, 1.0);\n"
+	"	gl_FragColor = final_color;\n"
+	"}\n";
+
+
+const char f_shader_k2[] =
+	"#ifdef GL_ES\n"
+	"precision mediump float;\n"
+	"#endif\n"
+
+	"uniform vec2 mouse;\n"
+	"uniform vec2 resolution;\n"
+	"uniform float time;\n"
+
+	"void main(){\n"
+	"	vec2 light_pos = resolution*mouse;\n"
+	"	float intensity = 0.048;\n"
+
+	"	float dist = distance(gl_FragCoord.xy, light_pos);\n"
+
+	"	vec3 light_color = vec3(1.0, 0.0, 0.0);\n"
+	"	float alpha = 0.8 / (dist*intensity);\n"
+	"	vec4 final_color = vec4(light_color, 1.0)*vec4(alpha, alpha, alpha, 0.59 );\n"
+
+	"	gl_FragColor = final_color;\n"
+//		"	gl_FragColor = vec4(1.0, 0.0, 0.0, 0.5);\n"
+	"}\n";
+
+
+//const char f_shader_k[] =
+//		"precision	mediump float;		\n"
+//		"varying		vec2  	tex;			\n"
+//  "void main() {\n"
+////  "  vtex = tex;\n"
+////  "  gl_Position = uVpMatrix * uModelMatrix * vec4(aPosition, 1.0);\n"
+//		"  		gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);	\n"
+//  "}\n";
+
+//typedef struct {
+//    float m[16];
+//} Mat4;
+//
+//typedef struct {
+//  GLint   aPosition;
+//  GLint   aTex;
+//  GLint   uVpMatrix;
+//  GLint   uModelMatrix;
+//  Mat4    VpMatrix;
+//} ShaderParams;
 
 typedef struct {
-    float m[16];
-} Mat4;
+	GLint		position;
+	GLint 	tex;
+	GLint		time;
+	GLint		resolution;
+	GLint 	mouse;
+} shader_params_k;
+
+
+//typedef struct {
+//    GLfloat x, y, z;
+//    GLfloat u, v;
+//} VertexType;
+
 
 typedef struct {
-  GLint   aPosition;
-  GLint   aTex;
-  GLint   uVpMatrix;
-  GLint   uModelMatrix;
-  Mat4    VpMatrix;
-} ShaderParams;
-
-typedef struct {
-    GLfloat x, y, z;
-    GLfloat u, v;
-} VertexType;
+	GLfloat x, y, z;
+	GLfloat u, v;
+} vertex;
 
 
-VertexType vObj[] = {
-  {-0.5f, 		-0.5f, 	0.0f, 		0.0f, 		1.0f},
-  {0.5f, 		-0.5f, 	0.0f, 		1.0f, 		1.0f},
-  {0.0f, 		0.5f, 		0.0f, 		0.5f,		0.0f},
+//VertexType vObj[] = {
+//  {-0.5f, 		-0.5f, 	0.0f, 		0.0f, 		1.0f},
+//  {0.5f, 		-0.5f, 	0.0f, 		1.0f, 		1.0f},
+//  {0.0f, 		0.5f, 		0.0f, 		0.5f,		0.0f},
+//};
+
+vertex bg_quad[] = {
+	{-1.0f, -1.0f, 0.0f, 0.0, 0.0},
+	{1.0f, -1.0f, 0.0f, 1.0f, 0.0f},
+	{1.0f, 1.0f, 0.0f, 1.0f, 0.0f},
+	{-1.0f, 1.0f, 0.0f, 0.0f, 1.0f},
 };
 
 
-Mat4 viewMat;
-Mat4 rotMat;
-Mat4 rotMat2;
-Mat4 modelMat;
-Mat4 modelMat2;
+
+//Mat4 viewMat;
+//Mat4 rotMat;
+//Mat4 rotMat2;
+//Mat4 modelMat;
+//Mat4 modelMat2;
 
 
 unsigned short iObj[] = {
-  0, 1, 2
+  0, 1, 3, 2
 };
 
-ShaderParams    g_sp;
+//ShaderParams    g_sp;
 ScreenSettings  g_sc;
+
+
+shader_params_k sp_k;
 
 GLuint g_vbo;
 GLuint g_ibo;
 GLuint g_program;
+
+GLuint g_program_2;
 
 
 
@@ -122,7 +265,8 @@ GLuint LoadShader(GLenum type, const char *shaderSource)
     if (infoLen > 0) {
       void* infoLog = malloc(sizeof(char) * infoLen);
       glGetShaderInfoLog(shader, infoLen, NULL, (char*)infoLog);
-      printf("Error compiling shader:\n%s\n", infoLog);
+      LOGE("Error compiling shader:\n%s\n", infoLog);
+//      LOGE("Error compiling shader");
       free(infoLog);
     }
     glDeleteShader(shader);
@@ -154,7 +298,8 @@ int InitShaders(GLuint *program, char const *vShSrc, char const *fShSrc)
     if (infoLen > 0) {
       void* infoLog = malloc(sizeof(char) * infoLen);
       glGetProgramInfoLog(prog, infoLen, NULL, (char*)infoLog);
-      printf("Error linking program:\n%s\n", infoLog);
+      LOGE("Error linking program:\n%s\n", infoLog);
+//      LOGE("Error linking program");
       free ( infoLog );
     }
     glDeleteProgram (prog);
@@ -172,7 +317,7 @@ void createBuffer()
   glGenBuffers(1, &g_vbo);
   // vertex buffer
   glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(vObj), vObj, GL_STATIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(bg_quad), bg_quad, GL_STATIC_DRAW);
 
   // index buffer
   glGenBuffers(1, &g_ibo);
@@ -180,20 +325,56 @@ void createBuffer()
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(iObj), iObj, GL_STATIC_DRAW);
 }
 
-void Draw ()
-{
-  glUseProgram(g_program);
-  glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_ibo);
-  glEnableVertexAttribArray(g_sp.aPosition);
-  glEnableVertexAttribArray(g_sp.aTex);
-  glVertexAttribPointer(g_sp.aPosition, 3, GL_FLOAT, GL_FALSE, 20, (void*)0);
-  glVertexAttribPointer(g_sp.aTex, 2, GL_FLOAT, GL_FALSE, 20, (void*)12);
-  glEnableVertexAttribArray(0);
-  glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_SHORT, 0);
+struct timezone tzp;
+struct timeval get_time;
+void get_time_long(unsigned long* t) {
+
+
+	gettimeofday(&get_time, &tzp);
+
+	*t = (get_time.tv_sec * SEC_IN_US) + get_time.tv_usec;
+
 }
 
-void makeUnit(Mat4 *m)
+float get_time_s() {
+
+	gettimeofday(&get_time, &tzp	);
+
+	return (float)get_time.tv_sec;
+}
+
+
+float t = 0.0F;
+void Draw() {
+
+//	LOGD("Draw", "Draw() called");
+
+	glUseProgram(g_program);
+
+//  glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
+//  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_ibo);
+//  glEnableVertexAttribArray(sp_k.position);
+//  glEnableVertexAttribArray(sp_k.tex);
+	glVertexAttribPointer(sp_k.position, 3, GL_FLOAT, GL_FALSE, 20, (void*) 0);
+	glVertexAttribPointer(sp_k.tex, 2, GL_FLOAT, GL_FALSE, 20, (void*) 12);
+	glEnableVertexAttribArray(0);
+
+	t += 0.005F;
+	if (t >= 1.4F)
+		t = -0.40F;
+
+	glUniform2f(sp_k.mouse, t, 0.50F);
+	glUniform2f(sp_k.resolution, (float) g_sc.width, (float) g_sc.height);
+	glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_SHORT, 0);
+
+	glUseProgram(g_program_2);
+	glUniform2f(sp_k.mouse, t * 0.25, 0.750F);
+	glUniform2f(sp_k.resolution, (float) g_sc.width, (float) g_sc.height);
+	glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_SHORT, 0);
+
+}
+
+/*void makeUnit(Mat4 *m)
 {
   memset(m, 0, sizeof(Mat4));
   m->m[0] = m->m[5] = m->m[10]= m->m[15] = 1.0f;
@@ -212,9 +393,9 @@ void makeProjectionMatrix(Mat4 *m, float n, float f, float hfov, float r)
   m->m[14]= -2.0f * f * n * q;
   m->m[1] = m->m[2] = m->m[3] = m->m[4]  = m->m[6]  = m->m[7]
           = m->m[8] = m->m[9] = m->m[12] = m->m[13] = m->m[15] = 0.0f;
-}
+}*/
 
-void setPosition(Mat4 *m, float x, float y, float z)
+/*void setPosition(Mat4 *m, float x, float y, float z)
 {
   m->m[12] = x;
   m->m[13] = y;
@@ -260,7 +441,7 @@ void mulMatrix(Mat4 *r, Mat4 *a, Mat4 *b)
   r->m[13] = a1 * b12+ a5 * b13+  a9 * b14+ a13 * b15;
   r->m[14] = a2 * b12+ a6 * b13+ a10 * b14+ a14 * b15;
   r->m[15] = a3 * b12+ a7 * b13+ a11 * b14+ a15 * b15;
-}
+}*/
 
 
 EGLBoolean pi_SurfaceCreate(ANativeWindow* nw) {
@@ -349,33 +530,57 @@ void init_pi(struct engine* e) {
 		return;
 
 
-	res = InitShaders(&g_program, vShaderSrc, fShaderSrc);
+	res = InitShaders(&g_program, v_shader_k, f_shader_k);
 	if (!res)
 		return;
 
+
+
+	res = InitShaders(&g_program_2, v_shader_k, f_shader_k2);
+	if (!res)
+		return;
+
+
 	createBuffer();
+//
+//	glUseProgram(g_program);
+//
+//
+	sp_k.position = glGetAttribLocation(g_program, "position");
+	sp_k.tex = glGetAttribLocation(g_program, "tex");
+	sp_k.resolution = glGetUniformLocation(g_program, "resolution");
+	sp_k.time = glGetUniformLocation(g_program, "time");
+	sp_k.mouse = glGetUniformLocation(g_program, "mouse");
 
-	glUseProgram(g_program);
-	g_sp.aPosition = glGetAttribLocation(g_program, "aPosition");
-	g_sp.aTex = glGetAttribLocation(g_program, "aTex");
-	g_sp.uVpMatrix = glGetUniformLocation(g_program, "uVpMatrix");
-	g_sp.uModelMatrix = glGetUniformLocation(g_program, "uModelMatrix");
+		glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
 
-	aspect = (float) g_sc.width / (float) g_sc.height;
-	makeProjectionMatrix(&g_sp.VpMatrix, 1, 1000, 53, aspect);
-	makeUnit(&viewMat);
-	setPosition(&viewMat, 0, 0, -2);
-	mulMatrix(&g_sp.VpMatrix, &g_sp.VpMatrix, &viewMat);
-	glUniformMatrix4fv(g_sp.uVpMatrix, 1, GL_FALSE, g_sp.VpMatrix.m);
 
-	makeUnit(&modelMat);
-	glUniformMatrix4fv(g_sp.uModelMatrix, 1, GL_FALSE, modelMat.m);
+//
+//
+//
+//
+//
+////	aspect = (float) g_sc.width / (float) g_sc.height;
+////	makeProjectionMatrix(&g_sp.VpMatrix, 1, 1000, 53, aspect);
+////	makeUnit(&viewMat);
+////	setPosition(&viewMat, 0, 0, -2);
+////	mulMatrix(&g_sp.VpMatrix, &g_sp.VpMatrix, &viewMat);
+////	glUniformMatrix4fv(g_sp.uVpMatrix, 1, GL_FALSE, g_sp.VpMatrix.m);
+////
+////	makeUnit(&modelMat);
+////	glUniformMatrix4fv(g_sp.uModelMatrix, 1, GL_FALSE, modelMat.m);
+////
+////	makeUnit(&rotMat);
+////	setRotationX(&rotMat, 0.5); /* 30 degree/sec */
+//
+//	glEnable(GL_BLEND);
+//	glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+//
+//	glEnable(GL_DEPTH_TEST);
+//	glClearColor(0.0f, 0.2f, 0.4f, 1.0f);
 
-	makeUnit(&rotMat);
-	setRotationX(&rotMat, 0.5); /* 30 degree/sec */
 
-	glEnable(GL_DEPTH_TEST);
-	glClearColor(0.0f, 0.2f, 0.4f, 1.0f);
 
 }
 
@@ -386,8 +591,6 @@ void init_pi(struct engine* e) {
  */
 static void engine_handle_cmd(struct android_app* app, int32_t cmd) {
     struct engine* e = (struct engine*)app->userData;
-
-
 
     switch (cmd) {
         case APP_CMD_SAVE_STATE:
@@ -429,21 +632,7 @@ void android_main(struct android_app* state) {
 	struct engine e;
 	state->userData = &e;
 
-
-
-
-
-//	state->onAppCmd = [](struct android_app* app, int32_t cmd) {
-//		auto e = static_cast<engine*>(app->userData);
-//		switch (cmd) {
-//			case APP_CMD_INIT_WINDOW:
-//				LOGD("APP_CMD_INIT_WINDOW");
-////				init(e);
-//				break;
-//		}
-//	};
 	e.app = state;
-
 
     // Make sure glue isn't stripped.
     app_dummy();
@@ -453,9 +642,6 @@ void android_main(struct android_app* state) {
 //    state->onInputEvent = engine_handle_input;
     e.app = state;
 	LOGD("call_order", "android_main e.app = state");
-
-
-
 
 	while (1) {
 
@@ -477,21 +663,22 @@ void android_main(struct android_app* state) {
 			glViewport(0, 0, g_sc.width, g_sc.height);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-			/* X Rotation */
-			mulMatrix(&modelMat, &modelMat, &rotMat);
-			glUniformMatrix4fv(g_sp.uModelMatrix, 1, GL_FALSE, modelMat.m);
-
-			glUseProgram(g_program);
-			glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_ibo);
-			glEnableVertexAttribArray(g_sp.aPosition);
-			glEnableVertexAttribArray(g_sp.aTex);
-			glVertexAttribPointer(g_sp.aPosition, 3, GL_FLOAT, GL_FALSE, 20, (void*)0);
-			glVertexAttribPointer(g_sp.aTex, 2, GL_FLOAT, GL_FALSE, 20, (void*)12);
-			glEnableVertexAttribArray(0);
-			glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_SHORT, 0);
-
-			glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_SHORT, 0);
+			Draw();
+//			/* X Rotation */
+//			mulMatrix(&modelMat, &modelMat, &rotMat);
+//			glUniformMatrix4fv(g_sp.uModelMatrix, 1, GL_FALSE, modelMat.m);
+//
+//			glUseProgram(g_program);
+//			glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
+//			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_ibo);
+//			glEnableVertexAttribArray(g_sp.aPosition);
+//			glEnableVertexAttribArray(g_sp.aTex);
+//			glVertexAttribPointer(g_sp.aPosition, 3, GL_FLOAT, GL_FALSE, 20, (void*)0);
+//			glVertexAttribPointer(g_sp.aTex, 2, GL_FLOAT, GL_FALSE, 20, (void*)12);
+//			glEnableVertexAttribArray(0);
+////			glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_SHORT, 0);
+//
+//			glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_SHORT, 0);
 			eglSwapBuffers(g_sc.display, g_sc.surface);
 
 		}
